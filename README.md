@@ -1,0 +1,1 @@
+# thedefault-dircolors-generator
