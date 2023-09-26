@@ -190,6 +190,7 @@ process_mime_types() {
 	declare -A unq_extensions
 	unq_pri_types=()
 	unq_sec_types=()
+	extension_array=()
 
 	# Check if mime.types exists in the given directory
 	if [[ ! -f "$dir/mime.types" ]]; then
@@ -262,6 +263,30 @@ The script created this file, but somebody removed it in the meantime."
 					if [[ ! " ${unq_sec_types[@]} " =~ " ${file_wo_ext} " ]];
 					then
 						unq_sec_types+=("$file_wo_ext")
+					fi
+				fi
+			done
+		fi
+	done
+
+	# Count unique extensions and store them in the extension_array
+	for pri_type_dir in "$dir"/*; do
+		if [ -d "$pri_type_dir" ]; then
+			for file in "$pri_type_dir"/*; do
+				if [ -f "$file" ]; then
+					local file_wo_ext=$(basename "$file")
+					local extension="${file_wo_ext##*.}"  # Extract extension
+					file_wo_ext="${file_wo_ext%.*}"  # Remove extension
+					
+					if [[ ! " ${unq_sec_types[@]} " =~ " ${file_wo_ext} " ]];
+					then
+						unq_sec_types+=("$file_wo_ext")
+					fi
+					
+					if [[ ! " ${extension_array[@]} " =~ " ${extension} " ]];
+					then
+						extension_array+=("$extension")
+						((extension_counter++))
 					fi
 				fi
 			done
@@ -646,7 +671,7 @@ generate_mime_types_based_on_primary_types() {
 	# Generate mime types based on unique primary types
 	for primary_type in "${unq_pri_types[@]}"; do
 		# Customize the mime type generation accordingly
-		echo "text/plain $extension"
+		echo "$primary_type"
 		# Or you can write to a file as needed.
 	done
 }
@@ -655,16 +680,16 @@ generate_mime_types_based_on_secondary_types() {
 	# Generate mime types based on unique secondary types
 	for secondary_type in "${unq_sec_types[@]}"; do
 		# Customize the mime type generation accordingly
-		echo "text/plain $extension"
+		echo "$secondary_type"
 		# Or you can write to a file as needed.
 	done
 }
 
 generate_mime_types_based_on_extensions() {
 	# Generate mime types based on unique extensions
-	for extension in "${!unq_extensions[@]}"; do
+	for extension in "${extension_array[@]}"; do
 		# Customize the mime type generation accordingly
-		echo "text/plain $extension"
+		echo "$extension"
 		# Or you can write to a file as needed.
 	done
 }
