@@ -269,8 +269,8 @@ The script created this file, but somebody removed it in the meantime."
 	done
 
 	# Print the counts
-	echo "Unique primary mime types: ${#unq_pri_types[@]}"
-	echo "Unique secondary mime types: ${#unq_sec_types[@]}"
+	echo "Unique MIME types: ${#unq_pri_types[@]}"
+	echo "Unique MIME subtypes: ${#unq_sec_types[@]}"
 	echo "Unique extensions: ${extension_counter}"
 }
 
@@ -555,6 +555,7 @@ q - for quit
 			u_input=${u_input:-${file_types_default[$var_default]}}
 			
 			# Format checking
+			# TODO Make it so that "target" is allowed only for links
 			if echo "$u_input" | grep -qE "^(target|[0-9;iwqce]*)$";
 			then
 				echo "" #valid input
@@ -612,6 +613,45 @@ $(echo "${file_types[$key]}" | tr '\n' ' ')" |\
 		done
 	done
 }
+
+# Function to generate a dircolors demo file from the mime-types demo
+# directories and files
+generate_mime_types_tmp() {
+	if="$1"
+	of="$2"
+
+	# Ensure the output file exists
+	if [[ ! -f $of ]]; then
+		touch $of
+	fi
+	
+	# Change to the mime-types directory
+	cd $if
+
+	# Loop through subdirectories in the mime-types directory
+	for pri_type in */; do
+		# Remove trailing slash from directory name
+		pri_type=${pri_type%/}
+		
+		# Loop through files in the subdirectory
+		for file in "$pri_type"/*; do
+			# Get the file extension
+			extension="${file##*.}"
+			
+			# Get the file name without the extension
+			sec_type="${file##*/}"
+			# Remove the extension from the file name
+			sec_type="${sec_type%.*}"
+			
+			# Print the desired format
+			echo ".$extension ANSI_ESCAPE # $pri_type $sec_type" >> $of
+		done
+	done
+
+	# Return to the original directory
+	cd -
+}
+
 generate_mime_types() {
 	while true; do
 		echo "Select an option to generate mime types:"
@@ -624,7 +664,7 @@ generate_mime_types() {
 
 		case $choice in
 			1)
-				generate_mime_types_based_on_primary_types
+				generate_mime_types_based_on_primary_types "$mime_types_dir"
 				;;
 			2)
 				generate_mime_types_based_on_secondary_types
@@ -642,31 +682,29 @@ generate_mime_types() {
 	done
 }
 
+# Function to generate mime types based on primary types
 generate_mime_types_based_on_primary_types() {
-	# Generate mime types based on unique primary types
-	for primary_type in "${unq_pri_types[@]}"; do
-		# Customize the mime type generation accordingly
-		echo "text/plain $extension"
-		# Or you can write to a file as needed.
-	done
+	cat /tmp/dircolors.demo.tmp
+	# TODO import the tmp file and ask the user to provide colors and effects
+	# for each primary type then use sed or awk to change ANSI_ESCAPE to the the
+	# sequence provided by the user.
+	
 }
 
+# Function to generate mime types based on secondary types
+# Similar to generate_file_types the function will generate a list of all
+# extensions for each secondary type and then ask the user for the colors and
+# the effects for each secondary type to fill in the dircolors file.
 generate_mime_types_based_on_secondary_types() {
-	# Generate mime types based on unique secondary types
-	for secondary_type in "${unq_sec_types[@]}"; do
-		# Customize the mime type generation accordingly
-		echo "text/plain $extension"
-		# Or you can write to a file as needed.
-	done
+	echo "Generating mime types based on secondary types. This might take a while..."
 }
 
+# Function to generate mime types based on extension
+# Similar to generate_file_types the function will generate a list of all
+# extensions and then ask the user for the colors and the effects for each
+# extension to fill in the dircolors file.
 generate_mime_types_based_on_extensions() {
-	# Generate mime types based on unique extensions
-	for extension in "${!unq_extensions[@]}"; do
-		# Customize the mime type generation accordingly
-		echo "text/plain $extension"
-		# Or you can write to a file as needed.
-	done
+	echo "Generating mime types based on extensions. This might take a while..."
 }
 
 # Entry point of the script
@@ -765,9 +803,13 @@ Do you want to proceed?"
 			echo ""
 			echo "Adding colors and effects for mime types:"
 			echo ""
-			echo "Unique primary mime types: ${#unq_pri_types[@]}"
-			echo "Unique secondary mime types: ${#unq_sec_types[@]}"
+			echo "Unique MIME types: ${#unq_pri_types[@]}"
+			echo "Unique MIME subtypes: ${#unq_sec_types[@]}"
 			echo "Unique extensions: ${extension_counter}"
+			echo ""
+			echo "Processing MIME types. This might take a while..."
+			generate_mime_types_tmp "${mime_types_dir}" "/tmp/dircolors.demo.tmp"
+			echo "The temporary file has been created."
 			echo ""
 			generate_mime_types
 		else
@@ -794,9 +836,13 @@ Do you want to proceed?"
 			echo ""
 			echo "Adding colors and effects for mime types:"
 			echo ""
-			echo "Unique primary mime types: ${#unq_pri_types[@]}"
-			echo "Unique secondary mime types: ${#unq_sec_types[@]}"
+			echo "Unique MIME types: ${#unq_pri_types[@]}"
+			echo "Unique MIME subtypes: ${#unq_sec_types[@]}"
 			echo "Unique extensions: ${extension_counter}"
+			echo ""
+			echo "Processing MIME types. This might take a while..."
+			generate_mime_types_tmp "/${prefix}/${mime_types_dir}" "/tmp/dircolors.demo.tmp"
+			echo "The temporary file has been created."
 			echo ""
 			generate_mime_types
 		fi
