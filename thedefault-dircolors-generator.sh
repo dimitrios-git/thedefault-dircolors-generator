@@ -5,7 +5,7 @@
 # dircolors file.
 
 # Global variables
-version="20230925b"
+version="20230927b"
 app_dir="demo"
 file_types_dir="${app_dir}/file-types.demo"
 mime_types_dir="${app_dir}/mime-types.demo"
@@ -664,7 +664,7 @@ generate_mime_types() {
 
 		case $choice in
 			1)
-				generate_mime_types_based_on_primary_types "$mime_types_dir"
+				generate_mime_types_based_on_primary_types
 				;;
 			2)
 				generate_mime_types_based_on_secondary_types
@@ -684,11 +684,98 @@ generate_mime_types() {
 
 # Function to generate mime types based on primary types
 generate_mime_types_based_on_primary_types() {
-	cat /tmp/dircolors.demo.tmp
-	# TODO import the tmp file and ask the user to provide colors and effects
-	# for each primary type then use sed or awk to change ANSI_ESCAPE to the the
-	# sequence provided by the user.
-	
+	# Check if the file exists
+	if [ ! -f "/tmp/dircolors.demo.tmp" ]; then
+		echo "File /tmp/dircolors.demo.tmp does not exist."
+		exit 1
+	fi
+
+	# Create an array to store extension, color, mime_type, and mime_subtype
+	extensions=()
+
+	# Read the file and populate the array
+	while IFS= read -r line; do
+		# Extract information from each line
+		extension=$(echo "$line" | awk '{print $1}')
+		color=$(echo "$line" | awk '{print $2}')
+		mime_type=$(echo "$line" | awk '{print $4}')
+		mime_subtype=$(echo "$line" | awk '{print $5}')
+
+		# Append the data to the array
+		echo "Appending $extension $color $mime_type $mime_subtype"
+		extensions+=("$extension" "$color" "$mime_type" "$mime_subtype")
+	done < "/tmp/dircolors.demo.tmp"
+	echo "Array populated."
+	echo ""
+
+	# Loop through unique primary types and process each element
+	for pri_type in "${unq_pri_types[@]}"; do
+		echo "Processing primary type: $pri_type"
+		while true; do
+			echo "Try:"
+			echo "i - for more information"
+			echo "w - for starting the color wizard"
+			echo "c - for displaying text colors"
+			echo "e - for displaying text effects"
+			echo "q - for quit"
+			
+			prompt_msg="Enter an ANSI escape sequence for:"
+			prompt_for="$pri_type"
+			prompt_default="(thedefault: 00;00): "
+			prompt_full="$prompt_msg"$'\n'"$prompt_for"$'\n'"$prompt_default"
+			
+			# Read user input into a variable
+			read -p "${prompt_full}" u_input
+			u_input=${u_input:-00;00}
+
+			# Format checking
+			# TODO Review my options for the format checking
+			if echo "$u_input" | grep -qE "^([0-9;iwqce]*)$"; then
+				echo "" # valid input
+			else
+				echo "Invalid input. Try again."
+				echo ""
+				break  # Exit the inner loop on invalid input
+			fi
+
+			case $u_input in
+				[Ii]* )
+					var_info=""
+					echo "Not supported yet"
+					echo ""
+					echo "Primary type: $pri_type"
+					echo "---"
+					continue
+					;;
+				[Ww]* )
+					color_wizard
+					u_input="${u_seq}"
+					;;
+				[Cc]* )
+					detect_display_colors "38;5"
+					continue
+					;;
+				[Ee]* )
+					display_effects
+					continue
+					;;
+				[Qq]* )
+					exit 0
+			esac
+			
+			echo -e "
+${s_aes}${u_input}mThese are your chosen colors and effects for:\
+	${pri_type}${e_aes}"
+			echo ""
+			echo ""
+			preprompt="Is this the correct colors and effect for:"
+			if prompt_ynq "${preprompt} ${pri_type}? "; then
+				# Replace the ANSI_ESCAPE with the user input
+				sed -i "s/ANSI_ESCAPE # ${pri_type}/${u_input} # ${pri_type}/g" /tmp/dircolors.demo.tmp
+				break
+			fi
+		done
+	done
 }
 
 # Function to generate mime types based on secondary types
@@ -696,7 +783,97 @@ generate_mime_types_based_on_primary_types() {
 # extensions for each secondary type and then ask the user for the colors and
 # the effects for each secondary type to fill in the dircolors file.
 generate_mime_types_based_on_secondary_types() {
-	echo "Generating mime types based on secondary types. This might take a while..."
+	# Check if the file exists
+	if [ ! -f "/tmp/dircolors.demo.tmp" ]; then
+		echo "File /tmp/dircolors.demo.tmp does not exist."
+		exit 1
+	fi
+
+	# Create an array to store extension, color, mime_type, and mime_subtype
+	extensions=()
+
+	# Read the file and populate the array
+	while IFS= read -r line; do
+		# Extract information from each line
+		extension=$(echo "$line" | awk '{print $1}')
+		color=$(echo "$line" | awk '{print $2}')
+		mime_type=$(echo "$line" | awk '{print $4}')
+		mime_subtype=$(echo "$line" | awk '{print $5}')
+
+		# Append the data to the array
+		echo "Appending $extension $color $mime_type $mime_subtype"
+		extensions+=("$extension" "$color" "$mime_type" "$mime_subtype")
+	done < "/tmp/dircolors.demo.tmp"
+	echo "Array populated."
+	echo ""
+
+	# Loop through unique primary types and process each element
+	for sec_type in "${unq_sec_types[@]}"; do
+		while true; do
+			echo "Try:"
+			echo "i - for more information"
+			echo "w - for starting the color wizard"
+			echo "c - for displaying text colors"
+			echo "e - for displaying text effects"
+			echo "q - for quit"
+			
+			prompt_msg="Enter an ANSI escape sequence for:"
+			prompt_for="$sec_type"
+			prompt_default="(thedefault: 00;00): "
+			prompt_full="$prompt_msg"$'\n'"$prompt_for"$'\n'"$prompt_default"
+			
+			# Read user input into a variable
+			read -p "${prompt_full}" u_input
+			u_input=${u_input:-00;00}
+
+			# Format checking
+			# TODO Review my options for the format checking
+			if echo "$u_input" | grep -qE "^([0-9;iwqce]*)$"; then
+				echo "" # valid input
+			else
+				echo "Invalid input. Try again."
+				echo ""
+				break  # Exit the inner loop on invalid input
+			fi
+
+			case $u_input in
+				[Ii]* )
+					var_info=""
+					echo "Not supported yet"
+					echo ""
+					echo "Secondary type: $sec_type"
+					echo "---"
+					continue
+					;;
+				[Ww]* )
+					color_wizard
+					u_input="${u_seq}"
+					;;
+				[Cc]* )
+					detect_display_colors "38;5"
+					continue
+					;;
+				[Ee]* )
+					display_effects
+					continue
+					;;
+				[Qq]* )
+					exit 0
+			esac
+			
+			echo -e "
+${s_aes}${u_input}mThese are your chosen colors and effects for:\
+	${sec_type}${e_aes}"
+			echo ""
+			echo ""
+			preprompt="Is this the correct colors and effect for:"
+			if prompt_ynq "${preprompt} ${sec_type}? "; then
+				# Replace the ANSI_ESCAPE with the user input
+				sed -i "/${sec_type}/s/ANSI_ESCAPE/${u_input}/g" /tmp/dircolors.demo.tmp
+				break
+			fi
+		done
+	done
 }
 
 # Function to generate mime types based on extension
@@ -704,7 +881,104 @@ generate_mime_types_based_on_secondary_types() {
 # extensions and then ask the user for the colors and the effects for each
 # extension to fill in the dircolors file.
 generate_mime_types_based_on_extensions() {
-	echo "Generating mime types based on extensions. This might take a while..."
+	# Check if the file exists
+	if [ ! -f "/tmp/dircolors.demo.tmp" ]; then
+		echo "File /tmp/dircolors.demo.tmp does not exist."
+		exit 1
+	fi
+
+	# Create an array to store extension, color, mime_type, and mime_subtype
+	extensions=()
+
+	# Read the file and populate the array
+	while IFS= read -r line; do
+		# Extract information from each line
+		extension=$(echo "$line" | awk '{print $1}')
+		color=$(echo "$line" | awk '{print $2}')
+		mime_type=$(echo "$line" | awk '{print $4}')
+		mime_subtype=$(echo "$line" | awk '{print $5}')
+
+		# Append the data to the array
+		echo "Appending $extension $color $mime_type $mime_subtype"
+		extensions+=("$extension" "$color" "$mime_type" "$mime_subtype")
+	done < "/tmp/dircolors.demo.tmp"
+	echo "Array populated."
+	echo ""
+
+	# Loop through the array and process each element
+	for ((i = 0; i < ${#extensions[@]}; i += 4)); do
+		extension="${extensions[i]}"
+		color="${extensions[i + 1]}"
+		mime_type="${extensions[i + 2]}"
+		mime_subtype="${extensions[i + 3]}"
+
+		while true; do
+			echo "Try:"
+			echo "i - for more information"
+			echo "w - for starting the color wizard"
+			echo "c - for displaying text colors"
+			echo "e - for displaying text effects"
+			echo "q - for quit"
+			
+			prompt_msg="Enter an ANSI escape sequence for:"
+			prompt_for="$extension"
+			prompt_default="(thedefault: 00;00): "
+			prompt_full="$prompt_msg"$'\n'"$prompt_for"$'\n'"$prompt_default"
+			
+			# Read user input into a variable
+			read -p "${prompt_full}" u_input
+			u_input=${u_input:-00;00}
+
+			# Format checking
+			# TODO Review my options for the format checking
+			if echo "$u_input" | grep -qE "^([0-9;iwqce]*)$"; then
+				echo "" # valid input
+			else
+				echo "Invalid input. Try again."
+				echo ""
+				break  # Exit the inner loop on invalid input
+			fi
+
+			case $u_input in
+				[Ii]* )
+					var_info=""
+					echo "Not supported yet"
+					echo ""
+					echo "Extension: $extension"
+					echo "MIME Type: $mime_type"
+					echo "MIME Subtype: $mime_subtype"
+					echo "---"
+					continue
+					;;
+				[Ww]* )
+					color_wizard
+					u_input="${u_seq}"
+					;;
+				[Cc]* )
+					detect_display_colors "38;5"
+					continue
+					;;
+				[Ee]* )
+					display_effects
+					continue
+					;;
+				[Qq]* )
+					exit 0
+			esac
+			
+			echo -e "
+${s_aes}${u_input}mThese are your chosen colors and effects for:\
+	${extension}${e_aes}"
+			echo ""
+			echo ""
+			preprompt="Is this the correct colors and effect for:"
+			if prompt_ynq "${preprompt} $extension? "; then
+				# Replace the ANSI_ESCAPE with the user input
+				sed -i "s/${extension} ANSI_ESCAPE # ${mime_type} ${mime_subtype}/${extension} ${u_input} # ${mime_type} ${mime_subtype}/g" /tmp/dircolors.demo.tmp
+				break
+			fi
+		done
+	done
 }
 
 # Entry point of the script
