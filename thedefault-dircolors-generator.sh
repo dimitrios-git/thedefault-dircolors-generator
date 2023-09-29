@@ -8,6 +8,7 @@
 # dircolors file.
 
 # Global variables
+help=""
 version="20230929b"
 demo_dir="demo"
 macros_dir="${demo_dir}/macros"
@@ -61,12 +62,12 @@ prompt_ynq() {
 	done
 }
 
-# Function to create or replace a directory
+# Function to create or overwrite a directory
 create_directory() {
 	local dir="$1"
 	local message="
 The script will use the existing directory and it will not delete or overwrite
-existing files, however, it may alter their attributes.
+existing files, however, it may alter their permissions in some cases.
 "
 	
 	if [[ -d "$dir" ]]; then
@@ -86,8 +87,7 @@ check_permissions() {
     local expected_perms="$2"
     local actual_perms=$(stat -c "%a" "$file")
     if [[ "$actual_perms" == "$expected_perms" ]]; then
-    	echo "Permissions for $file are already set to $expected_perms."
-    	echo ""
+    	printf "Permissions for $file are already set to $expected_perms."
     	return 0
     else
     	return 1
@@ -153,100 +153,6 @@ create_demo_macros() {
             chmod "$perms" "$file_path"
         fi
     done
-}
-
-# Function to process mime.types
-process_mime_types() {
-	local dir="$1"
-	extension_counter=0
-	declare -A unq_extensions
-	unq_pri_types=()
-	unq_sec_types=()
-
-	# Check if mime.types exists in the given directory
-	if [[ ! -f "$dir/mime.types" ]]; then
-		divider "-"
-		echo "
-Error: $dir/mime.types does not exist.
-
-The script created this file, but somebody removed it in the meantime."
-		exit 1
-	fi
-
-	printf "Processing MIME types... This might take a while\n"
-	while IFS= read -r line; do
-		# Check if the line contains a /
-		if echo "$line" | grep -q "/"; then
-			local mime_type=$(echo "$line" | awk '{print $1}')
-			local ext=$(echo "$line" | \
-				awk '{$1=""; print $0}' | \
-				tr -s ' ' | \
-				sed 's/^ //')
-			local pri_type=$(echo "$mime_type" | cut -d'/' -f1)
-			local sec_type=$(echo "$mime_type" | cut -d'/' -f2)
-
-			# Print processing information
-			if [[ $verbose == true ]]; then
-				echo "Processing MIME type: $mime_type"
-			fi
-
-			# Exclude commented lines and inode
-			if [[ ${pri_type:0:1} == "#" ]] || \
-				[[ ${pri_type:0:5} == "inode" ]]; then
-				if [[ $verbose == true ]]; then
-					echo "Skipping: $mime_type"
-				fi
-				continue
-			fi
-
-			# Count unique extensions and create files
-			# TODO The creation of files must be done in a separate function
-			for extension in $ext;
-			do
-				if [[ ! -f "$dir/$pri_type/$sec_type.$extension" ]];
-				then
-					mkdir -p "$dir/$pri_type/"
-					touch "$dir/$pri_type/$sec_type.$extension"
-				fi
-				((extension_counter++))
-				unq_extensions["$extension"]=1
-			done
-
-			# Check if primary type directory exists
-			# TODO The creation of directories must be done in a separate function
-			if [ ! -d "$dir/$pri_type" ]; then
-				create_directory "$dir/$pri_type"
-			fi
-
-			# Count unique primary types
-			if [[ ! " ${unq_pri_types[@]} " =~ " ${pri_type} " ]];
-			then
-				unq_pri_types+=("$pri_type")
-			fi
-		fi
-	done < "$dir/mime.types"
-
-	# Count unique secondary types (based on filenames without extensions)
-	# TODO The counting of unique secondary types must be done in a separate function
-	for pri_type_dir in "$dir"/*; do
-		if [ -d "$pri_type_dir" ]; then
-			for file in "$pri_type_dir"/*; do
-				if [ -f "$file" ]; then
-					local file_wo_ext=$(basename "$file")
-					file_wo_ext="${file_wo_ext%.*}"  # Remove extension
-					if [[ ! " ${unq_sec_types[@]} " =~ " ${file_wo_ext} " ]];
-					then
-						unq_sec_types+=("$file_wo_ext")
-					fi
-				fi
-			done
-		fi
-	done
-
-	# Print the counts
-	echo "Unique MIME types: ${#unq_pri_types[@]}"
-	echo "Unique MIME subtypes: ${#unq_sec_types[@]}"
-	echo "Unique extensions: ${extension_counter}"
 }
 
 # Function to detect and display the number of supported colors in columns
@@ -390,538 +296,17 @@ color_wizard() {
 	echo ""
 }
 
-# Function to declare vars for file types
-declare_file_types() {
-	declare -g -A file_types=(
-	["BLK"]=$'
-block devices'
-	["CAPABILITY"]=$'
-capabilities (linux-specific feature)'
-	["CHR"]=$'
-character devices'
-	["DIR"]=$'
-directories'
-	["DOOR"]=$'
-doors (IPC mechanism on some UNIX systems, notably Solaris)'
-	["EXEC"]=$'
-executables (files with execute permission set)'
-	["FIFO"]=$'
-pipes (named pipes/fifos)'
-	["FILE"]=$'
-regular files'
-	["LINK"]=$'
-symbolic links'
-	["MULTIHARDLINK"]=$'
-regular files with multiple hard links'
-	["NORMAL"]=$'
-global default color'
-	["ORPHAN"]=$'
-symbolic links pointing to non-existent files'
-	["SETGID"]=$'
-files or directories with the SETGID bit set'
-	["SETUID"]=$'
-files with the SETUID bit set'
-	["SOCK"]=$'
-sockets'
-	["OTHER_WRITABLE"]=$'
-directories writable to others, without sticky bit'
-	["STICKY"]=$'
-directories with the sticky bit set, but not other-writable'
-	["STICKY_OTHER_WRITABLE"]=$'
-directories both other-writable and with sticky bit set'
-	)
-	declare -g -A file_types_info=(
-	["i_BLK"]=$'
-Block devices, such as HDDs and SSDs, allow data to be read or written in
-blocks.'
-	["i_CAPABILITY"]=$'
-Capabilities are special attributes in Linux that grant specific privileges to
-executables.'
-	["i_CHR"]=$'
-Character devices communicate with the system by sending or receiving single
-characters at a time.'
-	["i_DIR"]=$'
-"Directories are containers used to organize files and other directories within
-a file system.'
-	["i_DOOR"]=$'
-Doors, primarily found in systems like Solaris, are a unique IPC mechanism for
-speedy communication between processes.'
-	["i_EXEC"]=$'
-Executables are special files that the system can run as programs, identified
-by their execute permissions.'
-	["i_FIFO"]=$'
-FIFOs, or named pipes, are a type of file that allows for inter-process
-communication using standard input/output mechanisms.'
-	["i_FILE"]=$'
-Regular files can contain text, data, or program instructions and are the most
-common type of file.'
-	["i_LINK"]=$'
-Symbolic links are pointers that reference another file or directory by its
-path, rather than storing its actual data.'
-	["i_MULTIHARDLINK"]=$'
-Files with multiple hard links share the same inode, and thus, the same data.
-They appear as distinct entries in the file system.'
-	["i_NORMAL"]=$'
-The global default color setting applies to any file type not explicitly
-mentioned.'
-	["i_ORPHAN"]=$'
-Orphaned symbolic links reference files or directories that no longer exist.'
-	["i_SETGID"]=$'
-Files or directories with the SETGID bit ensure that newly created files or
-subdirectories inherit the group ID of the directory, not that of the creating
-process.'
-	["i_SETUID"]=$'
-Files with the SETUID bit run with the privileges of the file owner, not the
-user who executed it.'
-	["i_SOCK"]=$'
-Sockets are special files that provide a mechanism for processes to communicate,
-either locally or over a network.'
-	["i_OTHER_WRITABLE"]=$'
-Directories writable to others but lacking the sticky bit can be a security risk
-as any user can modify their contents.'
-	["i_STICKY"]=$'
-Directories with the sticky bit set restrict deletion or renaming of files
-within. Only the file owner, directory owner, or root can delete or rename a
-file.'
-	["i_STICKY_OTHER_WRITABLE"]=$'
-Directories that are both other-writable and have the sticky bit set can be
-shared among users, but with some level of protection against file deletion
-by unauthorized users.'
-)
-	declare -g -A file_types_default=(
-	["d_BLK"]="40;33;1"
-	["d_CAPABILITY"]="30;41"
-	["d_CHR"]="40;33;01"
-	["d_DIR"]="01;96"
-	["d_DOOR"]="01;95"
-	["d_EXEC"]="01;94"
-	["d_FIFO"]="40;33"
-	["d_FILE"]="0"
-	["d_LINK"]="target"
-	["d_MULTIHARDLINK"]="00"
-	["d_NORMAL"]="0"
-	["d_ORPHAN"]="40;31;01"
-	["d_SETGID"]="30;43"
-	["d_SETUID"]="37;41"
-	["d_SOCK"]="01;95"
-	["d_OTHER_WRITABLE"]="34;42"
-	["d_STICKY"]="37;44"
-	["d_STICKY_OTHER_WRITABLE"]="32;44"
-	)
-}
 
-# Function to generate the file-types colors and effects
-generate_file_types() {
-	# Get ANSI escape sequence from user
-	for key in "${!file_types[@]}"; do
-		var_user="u_$key"
-		var_default="d_$key"
-		prompt_options="
-Try:
-i - for more information
-w - for starting the color wizard
-c - for displaying text colors
-e - for displaying text effects
-q - for quit
-"
-		while true; do
-			echo "${prompt_options}"
-			prompt_msg="Enter an ANSI escape sequence for:"
-			prompt_for="${file_types[$key]}"
-			prompt_default="(thedefault: ${file_types_default[$var_default]}): "
-			prompt_full="$prompt_msg"$"$prompt_for"$'\n'"$prompt_default"
-			read -p "$prompt_full" u_input
-			u_input=${u_input:-${file_types_default[$var_default]}}
-			
-			# Format checking
-			if [[ "${key}" == "LINK" ]];
-			then
-				if echo "$u_input" | grep -qE "^(target|[0-9;iwqce]*)$";
-				then
-					echo "" #valid input
-				else
-					echo "Invalid input. Try again."
-					echo ""
-					continue
-				fi
-			else
-				if echo "$u_input" | grep -qE "^([0-9;iwqce]*)$";
-				then
-					echo "" #valid input
-				else
-					echo "Invalid input. Try again."
-					echo ""
-					continue
-				fi
-			fi
-			
-			case $u_input in
-				[Ii]* )
-					var_info="i_$key"
-					echo "${file_types_info[$var_info]}"
-					echo ""
-					continue
-					;;
-				[Ww]* )
-					color_wizard
-					u_input="${u_seq}"
-					;;
-				[Cc]* )
-					detect_display_colors "38;5"
-					continue
-					;;
-				[Ee]* )
-					display_effects
-					continue
-					;;
-				[Qq]* )
-					exit 0
-			esac
-			
-			if [[ "$u_input" == "target" ]];
-			then
-				echo "
-Your links will have the colors and effects of the target file."
-			else
-				echo -e "
-${s_aes}${u_input}mThese are your chosen colors and effects for:\
-	${file_types[$key]}!${e_aes}"
-			fi
-			echo ""
-			echo ""
-			preprompt="Is this the correct colors and effect for:"
-			if prompt_ynq "${preprompt}${file_types[$key]}? ";
-			then
-				declare "$var_user=$u_input" # Dynamically set vars, e.g., u_BLK
-				# TODO Replace the ANSI_ESCAPE with the user input in a
-				# temporary file, instead of generating the file on the fly with
-				# echo and tee.
-				echo ""
-				echo "Adding to ${of}"
-				echo "${key} ${u_input} #\
-$(echo "${file_types[$key]}" | tr '\n' ' ')" |\
-					tee -a ${of}
-				break
-			fi
-		done
-	done
-}
 
-# Function to generate a dircolors demo file from the mime-types demo
-# directories and files
-# TODO Alter this so that the basis for the dircolors file is the mime.types
-generate_mime_types_tmp() {
-	if="$1"
-	of="$2"
 
-	# Ensure the output file exists
-	if [[ ! -f $of ]]; then
-		touch $of
-	fi
-	
-	# Change to the mime-types directory
-	cd $if
 
-	# Loop through subdirectories in the mime-types directory
-	for pri_type in */; do
-		# Remove trailing slash from directory name
-		pri_type=${pri_type%/}
-		
-		# Loop through files in the subdirectory
-		for file in "$pri_type"/*; do
-			# Get the file extension
-			extension="${file##*.}"
-			
-			# Get the file name without the extension
-			sec_type="${file##*/}"
-			# Remove the extension from the file name
-			sec_type="${sec_type%.*}"
-			
-			# Print the desired format
-			echo ".$extension ANSI_ESCAPE # $pri_type $sec_type" >> $of
-		done
-	done
 
-	# Return to the original directory
-	cd -
-}
 
-# Function to generate an array of extensions, colors, mime_types, and
-# mime_subtypes from the dircolors demo file.
-generate_mime_types() {
-	# Check if the file exists
-	if [ ! -f "/tmp/dircolors.demo.tmp" ]; then
-		echo "File /tmp/dircolors.demo.tmp does not exist."
-		exit 1
-	fi
 
-	# Create an array to store extension, color, mime_type, and mime_subtype
-	extensions=()
 
-	# Read the file and populate the array
-	while IFS= read -r line; do
-		# Extract information from each line
-		extension=$(echo "$line" | awk '{print $1}')
-		color=$(echo "$line" | awk '{print $2}')
-		mime_type=$(echo "$line" | awk '{print $4}')
-		mime_subtype=$(echo "$line" | awk '{print $5}')
 
-		# Append the data to the array
-		echo "Appending $extension $color $mime_type $mime_subtype"
-		extensions+=("$extension" "$color" "$mime_type" "$mime_subtype")
-	done < "/tmp/dircolors.demo.tmp"
-	echo "Array populated."
-	echo ""
 
-	while true; do
-		echo "Select an option to generate definitions for extensions:"
-		echo "1 - Colors and effects for extensions based on MIME types"
-		echo "2 - Colors and effects for extensions based on MIME subtypes"
-		echo "3 - Colors and effects for extensions one by one"
-		echo "q - Quit"
 
-		read -p "Enter your choice: " choice
-
-		case $choice in
-			1)
-				generate_mime_types_based_on_primary_types
-				;;
-			2)
-				generate_mime_types_based_on_secondary_types
-				;;
-			3)
-				generate_mime_types_based_on_extensions
-				;;
-			q)
-				exit 0
-				;;
-			*)
-				echo "Invalid choice. Please try again."
-				;;
-		esac
-	done
-}
-
-# Function to generate mime types based on primary types
-generate_mime_types_based_on_primary_types() {
-	# Loop through unique primary types and process each element
-	for pri_type in "${unq_pri_types[@]}"; do
-		echo "Processing primary type: $pri_type"
-		while true; do
-			echo "Try:"
-			echo "i - for more information"
-			echo "w - for starting the color wizard"
-			echo "c - for displaying text colors"
-			echo "e - for displaying text effects"
-			echo "q - for quit"
-			
-			prompt_msg="Enter an ANSI escape sequence for:"
-			prompt_for="$pri_type"
-			prompt_default="(thedefault: 00;00): "
-			prompt_full="$prompt_msg"$'\n'"$prompt_for"$'\n'"$prompt_default"
-			
-			# Read user input into a variable
-			read -p "${prompt_full}" u_input
-			u_input=${u_input:-00;00}
-
-			# Format checking
-			# TODO Review my options for the format checking
-			if echo "$u_input" | grep -qE "^([0-9;iwqce]*)$"; then
-				echo "" # valid input
-			else
-				echo "Invalid input. Try again."
-				echo ""
-				break  # Exit the inner loop on invalid input
-			fi
-
-			case $u_input in
-				[Ii]* )
-					var_info=""
-					echo "Not supported yet"
-					echo ""
-					echo "Primary type: $pri_type"
-					echo "---"
-					continue
-					;;
-				[Ww]* )
-					color_wizard
-					u_input="${u_seq}"
-					;;
-				[Cc]* )
-					detect_display_colors "38;5"
-					continue
-					;;
-				[Ee]* )
-					display_effects
-					continue
-					;;
-				[Qq]* )
-					exit 0
-			esac
-			
-			echo -e "
-${s_aes}${u_input}mThese are your chosen colors and effects for:\
-	${pri_type}${e_aes}"
-			echo ""
-			echo ""
-			preprompt="Is this the correct colors and effect for:"
-			if prompt_ynq "${preprompt} ${pri_type}? "; then
-				# Replace the ANSI_ESCAPE with the user input
-				sed -i "s/ANSI_ESCAPE # ${pri_type}/${u_input} # ${pri_type}/g" /tmp/dircolors.demo.tmp
-				break
-			fi
-		done
-	done
-}
-
-# Function to generate mime types based on secondary types
-generate_mime_types_based_on_secondary_types() {
-	# Loop through unique primary types and process each element
-	for sec_type in "${unq_sec_types[@]}"; do
-		while true; do
-			echo "Try:"
-			echo "i - for more information"
-			echo "w - for starting the color wizard"
-			echo "c - for displaying text colors"
-			echo "e - for displaying text effects"
-			echo "q - for quit"
-			
-			prompt_msg="Enter an ANSI escape sequence for:"
-			prompt_for="$sec_type"
-			prompt_default="(thedefault: 00;00): "
-			prompt_full="$prompt_msg"$'\n'"$prompt_for"$'\n'"$prompt_default"
-			
-			# Read user input into a variable
-			read -p "${prompt_full}" u_input
-			u_input=${u_input:-00;00}
-
-			# Format checking
-			# TODO Review my options for the format checking
-			if echo "$u_input" | grep -qE "^([0-9;iwqce]*)$"; then
-				echo "" # valid input
-			else
-				echo "Invalid input. Try again."
-				echo ""
-				break  # Exit the inner loop on invalid input
-			fi
-
-			case $u_input in
-				[Ii]* )
-					var_info=""
-					echo "Not supported yet"
-					echo ""
-					echo "Secondary type: $sec_type"
-					echo "---"
-					continue
-					;;
-				[Ww]* )
-					color_wizard
-					u_input="${u_seq}"
-					;;
-				[Cc]* )
-					detect_display_colors "38;5"
-					continue
-					;;
-				[Ee]* )
-					display_effects
-					continue
-					;;
-				[Qq]* )
-					exit 0
-			esac
-			
-			echo -e "
-${s_aes}${u_input}mThese are your chosen colors and effects for:\
-	${sec_type}${e_aes}"
-			echo ""
-			echo ""
-			preprompt="Is this the correct colors and effect for:"
-			if prompt_ynq "${preprompt} ${sec_type}? "; then
-				# Replace the ANSI_ESCAPE with the user input
-				sed -i "/${sec_type}/s/ANSI_ESCAPE/${u_input}/g" /tmp/dircolors.demo.tmp
-				break
-			fi
-		done
-	done
-}
-
-# Function to generate mime types based on extension
-generate_mime_types_based_on_extensions() {
-	# Loop through the array and process each element
-	for ((i = 0; i < ${#extensions[@]}; i += 4)); do
-		extension="${extensions[i]}"
-		color="${extensions[i + 1]}"
-		mime_type="${extensions[i + 2]}"
-		mime_subtype="${extensions[i + 3]}"
-
-		while true; do
-			echo "Try:"
-			echo "i - for more information"
-			echo "w - for starting the color wizard"
-			echo "c - for displaying text colors"
-			echo "e - for displaying text effects"
-			echo "q - for quit"
-			
-			prompt_msg="Enter an ANSI escape sequence for:"
-			prompt_for="$extension"
-			prompt_default="(thedefault: 00;00): "
-			prompt_full="$prompt_msg"$'\n'"$prompt_for"$'\n'"$prompt_default"
-			
-			# Read user input into a variable
-			read -p "${prompt_full}" u_input
-			u_input=${u_input:-00;00}
-
-			# Format checking
-			# TODO Review my options for the format checking
-			if echo "$u_input" | grep -qE "^([0-9;iwqce]*)$"; then
-				echo "" # valid input
-			else
-				echo "Invalid input. Try again."
-				echo ""
-				break  # Exit the inner loop on invalid input
-			fi
-
-			case $u_input in
-				[Ii]* )
-					var_info=""
-					echo "Not supported yet"
-					echo ""
-					echo "Extension: $extension"
-					echo "MIME Type: $mime_type"
-					echo "MIME Subtype: $mime_subtype"
-					echo "---"
-					continue
-					;;
-				[Ww]* )
-					color_wizard
-					u_input="${u_seq}"
-					;;
-				[Cc]* )
-					detect_display_colors "38;5"
-					continue
-					;;
-				[Ee]* )
-					display_effects
-					continue
-					;;
-				[Qq]* )
-					exit 0
-			esac
-			
-			echo -e "
-${s_aes}${u_input}mThese are your chosen colors and effects for:\
-	${extension}${e_aes}"
-			echo ""
-			echo ""
-			preprompt="Is this the correct colors and effect for:"
-			if prompt_ynq "${preprompt} $extension? "; then
-				# Replace the ANSI_ESCAPE with the user input
-				sed -i "s/${extension} ANSI_ESCAPE # ${mime_type} ${mime_subtype}/${extension} ${u_input} # ${mime_type} ${mime_subtype}/g" /tmp/dircolors.demo.tmp
-				break
-			fi
-		done
-	done
-}
 
 # Function to configure dircolors file
 configure_dircolors_file() {
@@ -1205,7 +590,6 @@ DOOR ANSI_ESCAPE # MACROS doors (IPC mechanism on some UNIX systems, notably Sol
 # Function to generate a dircolors file
 generate_dircolors_file() {
 	dircolors_file="$1"
-	printf "Starting generation of a dircolors file...\n"
 
 	# Check if the file exists
 	# TODO If the file exists, ask the user if they want to overwrite it
@@ -1226,6 +610,7 @@ Do you want to overwrite the file? "
 			rm -f "$dircolors_file"
 			generate_template=true
 		else
+			# TODO Add support for parsing the existing file
 			printf "Using existing file...\n"
 			generate_template=false
 		fi
@@ -1270,6 +655,11 @@ main() {
 	while [[ $# -gt 0 ]]; do
 		key="$1"
 		case $key in
+			--help)
+				# TODO Add help message
+				printf "$help\n"
+				exit 0
+				;;
 			--version)
 				printf "$version\n"
 				exit 0
@@ -1306,9 +696,9 @@ main() {
 				create_demo_dirs_files=true
 				create_directory "${demo_dir}"
 				create_demo_macros "${macros_dir}"
-				printf "MACROS demo created\n"
+				printf "MACROS demonstration directories and files created\n"
 				generate_dircolors_file "/tmp/dircolors.demo"
-				printf "MIME demo created\n"
+				printf "MIME demonstration directories and files created\n"
 				rm -f "/tmp/dircolors.demo"
 				printf "Temporary file removed\n"
 				;;
@@ -1320,142 +710,7 @@ main() {
 				;;
 		esac
 	done
-
-	# Temporary stop execution while working on the code
-	exit 0
-
-	# TODO Check if the file exists and offer to parse it
-
-	# Ask the user what's their next action
-	local message='
-The script will now create a dircolors template file:
-"'$(pwd)'/dircolors.template"
-
-y - Creates the dircolors template file.
-n - Skips the creation of dircolors template file.
-q - Quits this script.'
-	local question="
-Do you want to proceed?"
-
-	divider "-"
-	echo "$message"
-	if prompt_ynq "$question";
-	then
-		local q_create_dircolors_template_file=true
-	else
-		local q_create_dircolors_template_file=false
-	fi
-
-	if [[ ${q_create_dircolors_template_file} == true ]];
-	then
-		# Create the template file
-		echo ""
-		process_mime_types "$mime_types_dir"
-		echo ""
-	else
-		# Skip the creation of the template file and proceed to the next
-		# question
-		app_dir="demo"
-		echo ""
-	fi
-
-	# Ask the user if what's their next action
-	local message='
-The script will now generate a dircolors configuration file at:
-"'$(pwd)'/dircolors.demo"
-
-y - Starts the dircolors configuration file generator.
-n - Skips the dircolors configuration file generation.
-q - Quits this script.'
-	local question="
-Do you want to proceed?"
-
-	divider "-"
-	echo "$message"
-	if prompt_ynq "$question";
-	then
-		local generate_dircolors_demo_file=true
-	else
-		local generate_dircolors_demo_file=false
-	fi
-
-	if [[ ${generate_dircolors_demo_file} == true ]];
-	then
-		if [[ ${create_demo_dirs_files} == true ]];
-		then
-			local of="dircolors.demo"
-			echo ""
-			divider "-"
-			echo ""
-			echo "Adding colors and effects for file types:"
-			generate_file_types
-			echo ""
-			echo "Adding colors and effects for file types completed."
-			echo ""
-			divider "-"
-			echo ""
-			echo "Adding colors and effects for mime types:"
-			echo ""
-			echo "Unique MIME types: ${#unq_pri_types[@]}"
-			echo "Unique MIME subtypes: ${#unq_sec_types[@]}"
-			echo "Unique extensions: ${extension_counter}"
-			echo ""
-			echo "Processing MIME types. This might take a while..."
-			generate_mime_types_tmp "${mime_types_dir}" "/tmp/dircolors.demo.tmp"
-			echo "The temporary file has been created."
-			echo ""
-			generate_mime_types
-		else
-			local of="dircolors.demo"
-			local prefix="tmp"
-			echo ""
-			divider "-"
-			echo ""
-			create_directory "/${prefix}/${app_dir}"
-			create_directory "/${prefix}/${file_types_dir}"
-			create_demo_file_types "/${prefix}/${file_types_dir}"
-			create_directory "/${prefix}/${mime_types_dir}"
-			copy_mime_types_etc "/${prefix}/${mime_types_file}"
-			process_mime_types "/${prefix}/${mime_types_dir}"
-			echo ""
-			divider "-"
-			echo ""
-			echo "Adding colors and effects for file types:"
-			generate_file_types
-			echo ""
-			echo "Adding colors and effects for file types completed."
-			echo ""
-			divider "-"
-			echo ""
-			echo "Adding colors and effects for mime types:"
-			echo ""
-			echo "Unique MIME types: ${#unq_pri_types[@]}"
-			echo "Unique MIME subtypes: ${#unq_sec_types[@]}"
-			echo "Unique extensions: ${extension_counter}"
-			echo ""
-			echo "Processing MIME types. This might take a while..."
-			generate_mime_types_tmp "/${prefix}/${mime_types_dir}" "/tmp/dircolors.demo.tmp"
-			echo "The temporary file has been created."
-			echo ""
-			generate_mime_types
-		fi
-	else
-		echo "Nothing to be done."
-	fi
 }
 
 # Execute the main function
-# Remove temporary files if they exist
-if [[ -d "/tmp/${app_dir}" ]];
-then
-	rm -rf "/tmp/${app_dir}"
-fi
 main "$@"
-
-
-# TODO New flow
-# Process /etc/mime.types and generate a template file
-# Check if the file exists and avoid processing again if you trust it
-# Now we have a file, with ANSI_ESCAPE as the placeholder for the colors and
-# effects. We can use sed to replace the placeholder with the user input.
-# TODO Parse the file and continue from where the user left off
